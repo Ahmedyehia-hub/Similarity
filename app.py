@@ -127,36 +127,51 @@ def export_to_bytes(similar_df):
 # =========================
 
 def generate_similarity_df(df, code_col, name_col, sim_range):
-    results=[]
-    ref_counter=1
-    visited=set()
+    results = []
+    visited = set()
+    ref_counter = 1  # يبدأ من Ref0001
+
     for i in range(len(df)):
-        if i in visited: continue
+        if i in visited:
+            continue
         code_i, name_i = df[code_col][i], str(df[name_col][i])
-        cluster=[]
-        ref=f"Ref{ref_counter:04d}"
-        ref_counter+=1
+        cluster = []
+
         for j in range(i, len(df)):
-            if j in visited: continue
+            if j in visited:
+                continue
             code_j, name_j = df[code_col][j], str(df[name_col][j])
+            
+            # منع مطابقة المورد مع نفسه
+            if code_i == code_j and name_i == name_j:
+                continue
+
             sim = fuzz.ratio(name_i, name_j)
             if sim_range[0] <= sim <= sim_range[1]:
                 cluster.append((code_j, name_j, sim))
                 visited.add(j)
-        for code_j, name_j, sim in cluster:
-            results.append({
-                "Reference": ref,
-                "Code1": code_i,
-                "Name1": name_i,
-                "Code2": code_j,
-                "Name2": name_j,
-                "Similarity %": int(round(sim))
-            })
+
+        # لو فيه أي مطابقة في الكلاستر نضيف الـ Reference
+        if cluster:
+            ref = f"Ref{ref_counter:04d}"
+            ref_counter += 1
+            for code_j, name_j, sim in cluster:
+                results.append({
+                    "Reference": ref,
+                    "Code1": code_i,
+                    "Name1": name_i,
+                    "Code2": code_j,
+                    "Name2": name_j,
+                    "Similarity %": int(round(sim))
+                })
+
     if results:
-        df_res=pd.DataFrame(results)
-        df_res=df_res.sort_values(["Reference","Similarity %"], ascending=[True,False])
-        return df_res
+        df_res = pd.DataFrame(results)
+        df_res = df_res.sort_values(["Reference","Similarity %"], ascending=[True, False])
+        return df_res.reset_index(drop=True)
     return pd.DataFrame()
+
+
 
 # =========================
 # --- شاشات الموردين ---
@@ -168,6 +183,7 @@ def suppliers_registry_screen():
     with col3:
         st.image("cleo.jpg", width=220)  # logo على اليمين
     st.markdown("<h1>📊 Suppliers (Name & C/R)</h1>", unsafe_allow_html=True)
+    
     sim_range = st.slider("Similarity % (min - max)", 50, 100, (80, 100))
     df_result = pd.DataFrame()
     
@@ -181,6 +197,7 @@ def suppliers_registry_screen():
     back_button = st.button("🔙 Back")
     
     if run_button:
+        st.session_state.ref_counter = 1   # Reset Ref كل مرة Run
         with st.spinner("⏳ Processing… please wait"):
             try:
                 df = pd.read_excel("suppliers2.xlsx")
@@ -204,8 +221,10 @@ def suppliers_screen():
     with col3:
         st.image("cleo.jpg", width=220)  # logo على اليمين
     st.markdown("<h1>📊 Suppliers (Name only)</h1>", unsafe_allow_html=True)
+    
     sim_range = st.slider("Similarity % (min - max)", 50, 100, (80, 100))
     df_result = pd.DataFrame()
+    
     st.markdown("")
     st.markdown("")
     st.markdown("")
@@ -216,6 +235,7 @@ def suppliers_screen():
     back_button = st.button("🔙 Back")
     
     if run_button:
+        st.session_state.ref_counter = 1   # Reset Ref كل مرة Run
         with st.spinner("⏳ Processing… please wait"):
             try:
                 df = pd.read_excel("suppliers.xlsx")
@@ -232,6 +252,7 @@ def suppliers_screen():
     if back_button:
         st.session_state["page"] = "main"
         st.rerun()
+
 
 
 # =========================
