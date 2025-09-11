@@ -126,35 +126,38 @@ def export_to_bytes(similar_df):
 # --- Generate similarity ---
 # =========================
 
-def generate_similarity_df(df, code_col, name_col, sim_range):
+def generate_similarity_df(df, code_col, name_col, sim_range, ignore_exact=True):
+    """
+    df           : DataFrame الأصلي
+    code_col     : اسم عمود الكود
+    name_col     : اسم عمود الاسم
+    sim_range    : tuple (min, max) للنسبة المئوية للتشابه
+    ignore_exact : لو True يتجاهل الصفوف اللي الاسم والكود متطابقين
+    """
     results = []
+    ref_counter = 1
     visited = set()
-    ref_counter = 1  # يبدأ من Ref0001
 
     for i in range(len(df)):
-        if i in visited:
-            continue
         code_i, name_i = df[code_col][i], str(df[name_col][i])
         cluster = []
 
-        for j in range(i, len(df)):
-            if j in visited:
-                continue
+        for j in range(i + 1, len(df)):
             code_j, name_j = df[code_col][j], str(df[name_col][j])
-            
-            # منع مطابقة المورد مع نفسه
-            if code_i == code_j and name_i == name_j:
+            sim = fuzz.ratio(name_i, name_j)
+
+            # تجاهل الصف لو الاسم والكود متطابقين
+            if ignore_exact and code_i == code_j and name_i == name_j:
                 continue
 
-            sim = fuzz.ratio(name_i, name_j)
             if sim_range[0] <= sim <= sim_range[1]:
                 cluster.append((code_j, name_j, sim))
                 visited.add(j)
 
-        # لو فيه أي مطابقة في الكلاستر نضيف الـ Reference
         if cluster:
             ref = f"Ref{ref_counter:04d}"
             ref_counter += 1
+            # ضف الصف i مع كل عنصر متشابه
             for code_j, name_j, sim in cluster:
                 results.append({
                     "Reference": ref,
@@ -167,10 +170,10 @@ def generate_similarity_df(df, code_col, name_col, sim_range):
 
     if results:
         df_res = pd.DataFrame(results)
-        df_res = df_res.sort_values(["Reference","Similarity %"], ascending=[True, False])
-        return df_res.reset_index(drop=True)
-    return pd.DataFrame()
+        df_res = df_res.sort_values(["Reference", "Similarity %"], ascending=[True, False])
+        return df_res
 
+    return pd.DataFrame()
 
 
 # =========================
@@ -183,25 +186,19 @@ def suppliers_registry_screen():
     with col3:
         st.image("cleo.jpg", width=220)  # logo على اليمين
     st.markdown("<h1>📊 Suppliers (Name & C/R)</h1>", unsafe_allow_html=True)
-    
+
     sim_range = st.slider("Similarity % (min - max)", 50, 100, (80, 100))
     df_result = pd.DataFrame()
-    
-    st.markdown("")
-    st.markdown("")
-    st.markdown("")
+
+    # زر Run وزر Back
     run_button = st.button("🚀 Run")
-    st.markdown("")
-    st.markdown("")
-    st.markdown("")
     back_button = st.button("🔙 Back")
-    
+
     if run_button:
-        st.session_state.ref_counter = 1   # Reset Ref كل مرة Run
         with st.spinner("⏳ Processing… please wait"):
             try:
                 df = pd.read_excel("suppliers2.xlsx")
-                df_result = generate_similarity_df(df, "code", "merge", sim_range)
+                df_result = generate_similarity_df(df, "code", "merge", sim_range, ignore_exact=True)
                 if not df_result.empty:
                     st.dataframe(df_result.style.apply(color_similarity, axis=1), use_container_width=True)
                     output = export_to_bytes(df_result)
@@ -210,7 +207,7 @@ def suppliers_registry_screen():
                                        mime="application/vnd.ms-excel")
             except Exception as e:
                 st.error(f"⚠️ Error: {e}")
-                
+
     if back_button:
         st.session_state["page"] = "main"
         st.rerun()
@@ -221,25 +218,18 @@ def suppliers_screen():
     with col3:
         st.image("cleo.jpg", width=220)  # logo على اليمين
     st.markdown("<h1>📊 Suppliers (Name only)</h1>", unsafe_allow_html=True)
-    
+
     sim_range = st.slider("Similarity % (min - max)", 50, 100, (80, 100))
     df_result = pd.DataFrame()
-    
-    st.markdown("")
-    st.markdown("")
-    st.markdown("")
+
     run_button = st.button("🚀 Run")
-    st.markdown("")
-    st.markdown("")
-    st.markdown("")
     back_button = st.button("🔙 Back")
-    
+
     if run_button:
-        st.session_state.ref_counter = 1   # Reset Ref كل مرة Run
         with st.spinner("⏳ Processing… please wait"):
             try:
                 df = pd.read_excel("suppliers.xlsx")
-                df_result = generate_similarity_df(df, "code", "designation", sim_range)
+                df_result = generate_similarity_df(df, "code", "designation", sim_range, ignore_exact=True)
                 if not df_result.empty:
                     st.dataframe(df_result.style.apply(color_similarity, axis=1), use_container_width=True)
                     output = export_to_bytes(df_result)
@@ -248,10 +238,11 @@ def suppliers_screen():
                                        mime="application/vnd.ms-excel")
             except Exception as e:
                 st.error(f"⚠️ Error: {e}")
-                
+
     if back_button:
         st.session_state["page"] = "main"
         st.rerun()
+
 
 
 
